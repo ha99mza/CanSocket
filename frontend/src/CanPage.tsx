@@ -14,7 +14,7 @@ type CANFrameEvent = {
 };
 
 export default function CanPage() {
-  const [iface, setIface] = useState("vcan0");
+  const [iface, setIface] = useState("can0");
   const [filterIdText, setFilterIdText] = useState("");
   const [frames, setFrames] = useState<CANFrameEvent[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
