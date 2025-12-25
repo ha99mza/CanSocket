@@ -20,6 +20,7 @@ export default function CanPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState<"starting" | "stopping" | null>(null);
+  const [activeInput, setActiveInput] = useState<"iface" | "filter" | null>(null);
 
   function pushError(msg: unknown) {
     const text = String(msg);
@@ -49,6 +50,52 @@ export default function CanPage() {
     if (filter.kind === "invalid") return [];
     return frames.filter((f) => f.id === filter.id);
   }, [frames, filter]);
+
+  const keyboardLayout = useMemo(() => {
+    if (activeInput === "filter") {
+      return [
+        ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        ["A", "B", "C", "D", "E", "F"],
+        ["0x"],
+      ];
+    }
+    return [
+      ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+      ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+      ["z", "x", "c", "v", "b", "n", "m"],
+      ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+      ["-", "_", "."],
+    ];
+  }, [activeInput]);
+
+  function applyKey(key: string) {
+    if (!activeInput) return;
+
+    const update = (next: (prev: string) => string) => {
+      if (activeInput === "iface") {
+        setIface(next);
+      } else {
+        setFilterIdText(next);
+      }
+    };
+
+    if (key === "Backspace") {
+      update((prev) => prev.slice(0, -1));
+      return;
+    }
+
+    if (key === "Clear") {
+      update(() => "");
+      return;
+    }
+
+    if (key === "0x" && activeInput === "filter") {
+      update((prev) => (prev ? prev : "0x"));
+      return;
+    }
+
+    update((prev) => prev + key);
+  }
 
   async function start() {
     setErrors([]);
@@ -99,9 +146,13 @@ export default function CanPage() {
           <input
             value={iface}
             onChange={(e) => setIface(e.target.value)}
+            onFocus={() => setActiveInput("iface")}
             disabled={connected || disabled}
             placeholder="vcan0"
-            style={styles.input}
+            style={{
+              ...styles.input,
+              ...(activeInput === "iface" ? styles.inputActive : null),
+            }}
           />
         </div>
 
@@ -120,8 +171,12 @@ export default function CanPage() {
           <input
             value={filterIdText}
             onChange={(e) => setFilterIdText(e.target.value)}
+            onFocus={() => setActiveInput("filter")}
             placeholder="123 / 0x123 / 18FF50E5"
-            style={styles.input}
+            style={{
+              ...styles.input,
+              ...(activeInput === "filter" ? styles.inputActive : null),
+            }}
           />
           {filter.kind === "invalid" ? (
             <div style={styles.inlineError}>Invalid hex ID</div>
@@ -132,6 +187,47 @@ export default function CanPage() {
           )}
         </div>
       </div>
+
+      {activeInput ? (
+        <div style={styles.keyboardWrap}>
+          <div style={styles.keyboardHeader}>
+            <div style={styles.keyboardTitle}>
+              On-screen keyboard ({activeInput === "iface" ? "Interface" : "Filter ID"})
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveInput(null)}
+              style={styles.keyboardClose}
+            >
+              Hide
+            </button>
+          </div>
+          <div style={styles.keyboard}>
+            {keyboardLayout.map((row, rowIndex) => (
+              <div key={rowIndex} style={styles.keyRow}>
+                {row.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => applyKey(key)}
+                    style={styles.key}
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+            ))}
+            <div style={styles.keyRow}>
+              <button type="button" onClick={() => applyKey("Backspace")} style={styles.keyWide}>
+                Backspace
+              </button>
+              <button type="button" onClick={() => applyKey("Clear")} style={styles.keyWide}>
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {errors.length > 0 ? (
         <div style={styles.errorBox}>
@@ -264,6 +360,10 @@ const styles: Record<string, CSSProperties> = {
     outline: "none",
     fontFamily: "inherit",
   },
+  inputActive: {
+    borderColor: "rgba(90, 190, 255, 0.8)",
+    boxShadow: "0 0 0 1px rgba(90, 190, 255, 0.4)",
+  },
   button: {
     height: 34,
     borderRadius: 6,
@@ -283,6 +383,71 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     color: "#FF7A7A",
     minHeight: 14,
+  },
+  keyboardWrap: {
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 8,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  },
+  keyboardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 10,
+  },
+  keyboardTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    opacity: 0.8,
+  },
+  keyboardClose: {
+    height: 28,
+    borderRadius: 6,
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.10)",
+    color: "white",
+    padding: "0 10px",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  keyboard: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  keyRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  key: {
+    minWidth: 30,
+    height: 30,
+    borderRadius: 6,
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.10)",
+    color: "white",
+    padding: "0 8px",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+    textTransform: "none",
+  },
+  keyWide: {
+    minWidth: 100,
+    height: 30,
+    borderRadius: 6,
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.10)",
+    color: "white",
+    padding: "0 10px",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
   },
   errorBox: {
     marginBottom: 12,
